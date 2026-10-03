@@ -55,7 +55,7 @@ func (mach *OlmMachine) RequestRoomKey(ctx context.Context, toUser id.UserID, to
 	}
 
 	resChan := make(chan bool, 1)
-	go func() {
+	started := mach.GoBackground(ctx, func(ctx context.Context) {
 		select {
 		case <-keyResponseReceived:
 			// key request successful
@@ -91,7 +91,11 @@ func (mach *OlmMachine) RequestRoomKey(ctx context.Context, toUser id.UserID, to
 		}
 
 		mach.Client.SendToDevice(ctx, event.ToDeviceRoomKeyRequest, toDeviceCancel)
-	}()
+	})
+	if !started {
+		mach.roomKeyRequestFilled.Delete(sessionID)
+		resChan <- false
+	}
 	return resChan, nil
 }
 

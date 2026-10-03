@@ -62,10 +62,12 @@ func (mach *OlmMachine) GetOrRequestSecret(ctx context.Context, name id.Secret, 
 
 	// best effort cancel request from all devices when returning
 	defer func() {
-		go mach.sendToOneDevice(context.Background(), mach.Client.UserID, id.DeviceID("*"), event.ToDeviceSecretRequest, &event.SecretRequestEventContent{
-			Action:             event.SecretRequestCancellation,
-			RequestID:          requestID,
-			RequestingDeviceID: mach.Client.DeviceID,
+		mach.GoBackground(context.Background(), func(ctx context.Context) {
+			mach.sendToOneDevice(ctx, mach.Client.UserID, id.DeviceID("*"), event.ToDeviceSecretRequest, &event.SecretRequestEventContent{
+				Action:             event.SecretRequestCancellation,
+				RequestID:          requestID,
+				RequestingDeviceID: mach.Client.DeviceID,
+			})
 		})
 	}()
 

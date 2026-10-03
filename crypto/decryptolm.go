@@ -210,7 +210,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.U
 	if err != nil {
 		if err == ErrDecryptionFailedWithMatchingSession {
 			log.Warn().Msg("Found matching session, but decryption failed")
-			go mach.unwedgeDevice(log, sender, senderKey)
+			mach.GoBackground(mach.unwedgeContext(ctx), func(ctx context.Context) { mach.unwedgeDevice(ctx, log, sender, senderKey) })
 		}
 		return nil, fmt.Errorf("failed to decrypt olm event: %w", err)
 	}
@@ -225,7 +225,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.U
 	// New sessions can only be created if it's a prekey message, we can't decrypt the message
 	// if it isn't one at this point in time anymore, so return early.
 	if olmType != id.OlmMsgTypePreKey {
-		go mach.unwedgeDevice(log, sender, senderKey)
+		mach.GoBackground(mach.unwedgeContext(ctx), func(ctx context.Context) { mach.unwedgeDevice(ctx, log, sender, senderKey) })
 		return nil, ErrDecryptionFailedForNormalMessage
 	}
 
@@ -235,7 +235,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.U
 	session, err := mach.account.NewInboundSessionFrom(senderKey, ciphertext)
 	endTimeTrace()
 	if err != nil {
-		go mach.unwedgeDevice(log, sender, senderKey)
+		mach.GoBackground(mach.unwedgeContext(ctx), func(ctx context.Context) { mach.unwedgeDevice(ctx, log, sender, senderKey) })
 		return nil, fmt.Errorf("failed to create new session from prekey message: %w", err)
 	}
 	log = log.With().Str("new_olm_session_id", session.ID().String()).Logger()
@@ -263,7 +263,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.U
 			log.Warn().Msg("Goolm decryption was successful after libolm failure?")
 		}
 
-		go mach.unwedgeDevice(log, sender, senderKey)
+		mach.GoBackground(mach.unwedgeContext(ctx), func(ctx context.Context) { mach.unwedgeDevice(ctx, log, sender, senderKey) })
 		return nil, fmt.Errorf("failed to decrypt olm event with session created from prekey message: %w", err)
 	}
 
@@ -388,9 +388,9 @@ func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(
 
 const MinUnwedgeInterval = 1 * time.Hour
 
-func (mach *OlmMachine) unwedgeDevice(log zerolog.Logger, sender id.UserID, senderKey id.SenderKey) {
+func (mach *OlmMachine) unwedgeDevice(ctx context.Context, log zerolog.Logger, sender id.UserID, senderKey id.SenderKey) {
 	log = log.With().Str("action", "unwedge olm session").Logger()
-	ctx := log.WithContext(mach.backgroundCtx)
+	ctx = log.WithContext(ctx)
 	mach.recentlyUnwedgedLock.Lock()
 	prevUnwedge, ok := mach.recentlyUnwedged[senderKey]
 	delta := time.Since(prevUnwedge)

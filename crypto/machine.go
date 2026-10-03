@@ -37,6 +37,7 @@ type OlmMachine struct {
 	CryptoStore Store
 	StateStore  StateStore
 
+	managedBackground   *backgroundTasks
 	backgroundCtx       context.Context
 	cancelBackgroundCtx context.CancelFunc
 
@@ -550,7 +551,7 @@ func (mach *OlmMachine) HandleToDeviceEvent(ctx context.Context, evt *event.Even
 		mach.HandleEncryptedEvent(ctx, evt)
 		return
 	case *event.RoomKeyRequestEventContent:
-		go mach.HandleRoomKeyRequest(ctx, evt.Sender, content)
+		mach.GoBackground(ctx, func(ctx context.Context) { mach.HandleRoomKeyRequest(ctx, evt.Sender, content) })
 	case *event.BeeperRoomKeyAckEventContent:
 		mach.HandleBeeperRoomKeyAck(ctx, evt.Sender, content)
 	case *event.RoomKeyWithheldEventContent:

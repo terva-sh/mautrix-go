@@ -301,7 +301,9 @@ func (helper *CryptoHelper) HandleEncrypted(ctx context.Context, evt *event.Even
 
 	decrypted, err := helper.Decrypt(ctx, evt)
 	if errors.Is(err, NoSessionFound) && ctx.Value(mautrix.SyncTokenContextKey) != "" {
-		go helper.waitForSession(ctx, evt)
+		if !helper.mach.GoBackground(ctx, func(ctx context.Context) { helper.waitForSession(ctx, evt) }) {
+			helper.DecryptErrorCallback(evt, err)
+		}
 	} else if err != nil {
 		log.Warn().Err(err).Msg("Failed to decrypt event")
 		helper.DecryptErrorCallback(evt, err)
@@ -365,7 +367,9 @@ func (helper *CryptoHelper) waitForSession(ctx context.Context, evt *event.Event
 			helper.postDecrypt(ctx, decrypted)
 		}
 	} else {
-		go helper.waitLongerForSession(ctx, evt)
+		if !helper.mach.GoBackground(ctx, func(ctx context.Context) { helper.waitLongerForSession(ctx, evt) }) {
+			helper.DecryptErrorCallback(evt, NoSessionFound)
+		}
 	}
 }
 
@@ -375,7 +379,13 @@ func (helper *CryptoHelper) waitLongerForSession(ctx context.Context, evt *event
 	log.Debug().Int("wait_seconds", int(extendedSessionWaitTimeout.Seconds())).Msg("Couldn't find session, requesting keys and waiting longer...")
 
 	//lint:ignore SA1019 RequestSession will gracefully request from all devices if DeviceID is blank
-	go helper.RequestSession(context.TODO(), evt.RoomID, content.SenderKey, content.SessionID, evt.Sender, content.DeviceID)
+	requestCtx := context.TODO()
+	if helper.mach.ManagedBackgroundEnabled() {
+		requestCtx = ctx
+	}
+	helper.mach.GoBackground(requestCtx, func(ctx context.Context) {
+		helper.RequestSession(ctx, evt.RoomID, content.SenderKey, content.SessionID, evt.Sender, content.DeviceID)
+	})
 
 	if !helper.mach.WaitForSession(ctx, evt.RoomID, content.SenderKey, content.SessionID, extendedSessionWaitTimeout) {
 		log.Debug().Msg("Didn't get session, giving up")
