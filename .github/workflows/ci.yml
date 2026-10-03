@@ -1,0 +1,30 @@
+name: Cgo-free client and crypto
+on:
+  push:
+    branches: [release]
+    tags: ['v*-terva.*']
+  pull_request:
+permissions:
+  contents: read
+env:
+  CGO_ENABLED: '0'
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.27'
+      - name: Vet and test supported client and crypto graph
+        shell: bash
+        run: |
+          go vet -tags goolm . ./crypto ./crypto/cryptohelper ./crypto/olm ./crypto/goolm/... ./event/... ./id ./format/...
+          go test -tags goolm ./crypto -run 'TestManaged|TestBackgroundDefault' -count=20 -timeout=2m
+          go test -tags goolm . ./crypto/cryptohelper ./crypto/olm ./crypto/goolm/... ./event/... ./id ./format/...
+      - name: Four cgo-free client and crypto builds
+        shell: bash
+        run: |
+          for platform in linux/amd64 linux/arm64 darwin/arm64 windows/amd64; do
+            GOOS=${platform%/*} GOARCH=${platform#*/} go build -tags goolm . ./crypto ./crypto/cryptohelper ./crypto/olm ./crypto/goolm/... ./event/... ./id ./format/...
+          done
