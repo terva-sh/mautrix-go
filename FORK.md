@@ -12,7 +12,7 @@ your application's root `go.mod`:
 ```go
 require maunium.net/go/mautrix v0.31.0
 
-replace maunium.net/go/mautrix => github.com/terva-sh/mautrix-go v0.31.0-terva.1
+replace maunium.net/go/mautrix => github.com/terva-sh/mautrix-go v0.31.0-terva.2
 ```
 
 A library's replacement directives do not select the fork for its consumers.
@@ -35,3 +35,12 @@ runtime coverage. Upstream bridge binaries and full crypto/verificationhelper
 SQLite fixtures still require cgo and are outside that gate. Applications
 must separately own foreground commands, verification helpers and persistent
 message recovery; the worker API does not join arbitrary application work.
+
+For cached message reads, `OlmMachine.DecryptMegolmEventLocal(ctx, event)` uses
+local room keys and sender-device information without fetching unknown sender
+devices. Unknown devices keep conservative trust. The method preserves replay,
+room and cryptographic validation, and can update local session/replay state.
+It does not consume the device-fetch attempt used by normal Megolm/Olm sync
+or alter `DisableDecryptKeyFetching`. A missing room key returns the normal
+missing-session error. Store implementations must themselves be local to avoid
+networking; ordinary `DecryptMegolmEvent` behavior is unchanged.

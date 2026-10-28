@@ -20,7 +20,7 @@ jobs:
         shell: bash
         run: |
           go vet -tags goolm . ./crypto ./crypto/cryptohelper ./crypto/olm ./crypto/goolm/... ./event/... ./id ./format/...
-          go test -tags goolm ./crypto -run 'TestManaged|TestBackgroundDefault' -count=20 -timeout=2m
+          go test -tags goolm ./crypto -run 'TestManaged|TestBackgroundDefault|TestDecryptMegolmEventLocal' -count=20 -timeout=2m
           go test -tags goolm . ./crypto/cryptohelper ./crypto/olm ./crypto/goolm/... ./event/... ./id ./format/...
       - name: Four cgo-free client and crypto builds
         shell: bash

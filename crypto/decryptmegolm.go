@@ -68,6 +68,24 @@ func validateCiphertextCharacters(ciphertext []byte) bool {
 
 // DecryptMegolmEvent decrypts an m.room.encrypted event where the algorithm is m.megolm.v1.aes-sha2
 func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event) (*event.Event, error) {
+	return mach.decryptMegolmEvent(ctx, evt, false)
+}
+
+// DecryptMegolmEventLocal decrypts a cached event using only local room keys and
+// sender-device data. It performs the same cryptographic and replay checks as
+// DecryptMegolmEvent, but does not fetch unknown sender devices or consume the
+// machine's device-fetch attempt. Missing device data produces conservative
+// trust, not verification. It may update local session/replay state and returns
+// the usual error when a room key is unavailable.
+//
+// This per-call choice does not change concurrent sync or the machine-wide
+// DisableDecryptKeyFetching setting. Store implementations must be local for
+// this method to avoid network access.
+func (mach *OlmMachine) DecryptMegolmEventLocal(ctx context.Context, evt *event.Event) (*event.Event, error) {
+	return mach.decryptMegolmEvent(ctx, evt, true)
+}
+
+func (mach *OlmMachine) decryptMegolmEvent(ctx context.Context, evt *event.Event, localOnly bool) (*event.Event, error) {
 	content, ok := evt.Content.Parsed.(*event.EncryptedEventContent)
 	if !ok {
 		return nil, ErrIncorrectEncryptedContentType
@@ -117,7 +135,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event
 	} else if sess.SigningKey == ownSigningKey && sess.SenderKey == ownIdentityKey && sess.KeySource == id.KeySourceDirect && len(sess.ForwardingChains) == 0 {
 		trustLevel = id.TrustStateVerified
 	} else {
-		if mach.DisableDecryptKeyFetching || !mach.keyFetchAttempted.Add(userSenderKeyTuple{evt.Sender, sess.SenderKey}) {
+		if localOnly || mach.DisableDecryptKeyFetching || !mach.keyFetchAttempted.Add(userSenderKeyTuple{evt.Sender, sess.SenderKey}) {
 			device, err = mach.CryptoStore.FindDeviceByKey(ctx, evt.Sender, sess.SenderKey)
 		} else {
 			device, err = mach.GetOrFetchDeviceByKey(ctx, evt.Sender, sess.SenderKey)
